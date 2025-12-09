@@ -144,5 +144,50 @@ class ItemkuAPI:
 
         return res.json()
 
+    def update_stock(
+        self,
+        product_id: int,
+        new_stock: int,
+    ):
+        """
+        Update product stock using Itemku API.
+
+        Endpoint: POST https://tokoku-gateway.itemku.com/api/product/stock/update
+
+        Args:
+            product_id: Product ID to update
+            new_stock: New stock value (max 99999999)
+
+        Note: Cannot update stock for auto delivery products
+        """
+        print(f"Call api update stock for product_id: {product_id}, new_stock: {new_stock}")
+        nonce = str(int(datetime.now().timestamp()))
+
+        payload = {
+            "product_id": product_id,
+            "new_stock": new_stock,
+        }
+
+        token = generate_jwt_token(
+            nonce=nonce,
+            payload=payload,
+        )
+
+        header = {
+            "X-Api-Key": os.environ["ITEMKU_API_KEY"],
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Nonce": nonce,
+        }
+
+        res = requests.post(
+            url="https://tokoku-gateway.itemku.com/api/product/stock/update",
+            headers=header,
+            json=payload,
+        )
+        res.raise_for_status()
+
+        return res.json()
+
 
 itemku_api = ItemkuAPI()

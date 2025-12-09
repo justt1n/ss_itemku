@@ -28,11 +28,31 @@ def __filter_lower_than_target_price(
 def update_product_price(
     product_id: int,
     target_price: int,
+    stock: int | None = None,
 ):
+    """
+    Update product price and optionally update stock.
+
+    Args:
+        product_id: Product ID to update
+        target_price: New price to set
+        stock: Optional stock value to update. If provided, will also update stock.
+    """
     itemku_api.update_price(
         product_id=product_id,
         new_price=target_price,
     )
+
+    # Update stock if provided
+    if stock is not None:
+        try:
+            itemku_api.update_stock(
+                product_id=product_id,
+                new_stock=stock,
+            )
+        except Exception as e:
+            print(f"Warning: Failed to update stock: {e}")
+            # Continue even if stock update fails
 
     return
 
@@ -66,9 +86,17 @@ def update_by_min_price_or_max_price(
 
     product_id = extract_product_id_from_product_link(product.Product_link)
 
+    # Get stock from Google Sheets
+    try:
+        stock = product.stock()
+    except Exception as e:
+        print(f"Warning: Could not get stock from sheets: {e}")
+        stock = None
+
     update_product_price(
         product_id=product_id,
         target_price=target_price,
+        stock=stock,
     )
 
     return target_price
@@ -225,11 +253,19 @@ def check_product_compare_flow(
             _compare_price = min_price_product.price
             _compare_seller = min_price_product.seller.shop_name
 
+        # Get stock from Google Sheets
+        try:
+            stock = product.stock()
+        except Exception as e:
+            print(f"Warning: Could not get stock from sheets: {e}")
+            stock = None
+
         update_product_price(
             product_id=extract_product_id_from_product_link(
                 product_link=product.Product_link
             ),
             target_price=new_min_price,
+            stock=stock,
         )
 
         note_message, last_update_message = update_with_comparing_seller_message(
@@ -401,9 +437,17 @@ def check_product_compare_flow2(
             # Current price is higher than target, update needed
             print(f"Flow 2: Current price ({current_price}) > Target ({target_price}). Updating price.")
 
+            # Get stock from Google Sheets
+            try:
+                stock = product.stock()
+            except Exception as e:
+                print(f"Warning: Could not get stock from sheets: {e}")
+                stock = None
+
             update_product_price(
                 product_id=product_id,
                 target_price=target_price,
+                stock=stock,
             )
 
             note_message, last_update_message = update_with_min_price_message(
@@ -458,9 +502,17 @@ def check_product_compare_flow2(
             # Current price is higher than target, update needed
             print(f"Flow 2: Current price ({current_price}) > Target ({target_price}) (comparing with {_compare_seller} at {_compare_price}). Updating price.")
 
+            # Get stock from Google Sheets
+            try:
+                stock = product.stock()
+            except Exception as e:
+                print(f"Warning: Could not get stock from sheets: {e}")
+                stock = None
+
             update_product_price(
                 product_id=product_id,
                 target_price=target_price,
+                stock=stock,
             )
 
             note_message, last_update_message = update_with_comparing_seller_message(
