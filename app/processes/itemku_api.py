@@ -54,6 +54,62 @@ class ItemkuAPI:
     def valid_price(self, price: int) -> int:
         return int(round(float(price) / 10, 0) * 10)
 
+    def get_product_details(
+        self,
+        product_id: int,
+    ):
+        """
+        Get product details from Itemku API using product list endpoint.
+
+        Endpoint: POST https://tokoku-gateway.itemku.com/api/product/list
+
+        Uses the product list API with id filter to get a single product's details.
+
+        Returns:
+            dict: Product details including current price
+            Example response:
+            {
+                "success": true,
+                "data": {
+                    "data": [{
+                        "id": 123456,
+                        "name": "Product Name",
+                        "price": 10000,
+                        "stock": 50,
+                        ...
+                    }]
+                }
+            }
+        """
+        print(f"Call api get product details for product_id: {product_id}")
+        nonce = str(int(datetime.now().timestamp()))
+
+        payload = {
+            "id": product_id,
+            "page": 1
+        }
+
+        token = generate_jwt_token(
+            nonce=nonce,
+            payload=payload,
+        )
+
+        header = {
+            "X-Api-Key": os.environ["ITEMKU_API_KEY"],
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Nonce": nonce,
+        }
+
+        res = requests.post(
+            url="https://tokoku-gateway.itemku.com/api/product/list",
+            headers=header,
+            json=payload,
+        )
+        res.raise_for_status()
+
+        return res.json()
+
     def update_price(
         self,
         product_id: int,

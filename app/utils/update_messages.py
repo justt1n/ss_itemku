@@ -50,6 +50,30 @@ def update_with_comparing_seller_message(
     return note_message, _last_update_message
 
 
+def skip_update_price_already_competitive_message(
+    current_price: float,
+    target_price: float,
+    price_min: float,
+    price_max: float | None = None,
+    comparing_price: float | None = None,
+    comparing_seller: str | None = None,
+    lower_min_price_products: list[Product] = [],
+) -> tuple[str, str]:
+    now = datetime.now()
+    _last_update_message = last_update_message(now)
+
+    if comparing_price and comparing_seller:
+        note_message = f"""{_last_update_message}: Không cần cập nhật - Giá hiện tại đã cạnh tranh; CurrentPrice = {current_price}; TargetPrice = {target_price}; Pricemin = {price_min}, Pricemax = {price_max}, GiaSosanh = {comparing_price} - Seller: {comparing_seller}
+Đối thủ có giá bé hơn giá min : {__lower_min_price_product_format(lower_min_price_products)}
+"""
+    else:
+        note_message = f"""{_last_update_message}: Không cần cập nhật - Giá hiện tại đã cạnh tranh; CurrentPrice = {current_price}; TargetPrice = {target_price}; Pricemin = {price_min}, Pricemax = {price_max}
+Đối thủ có giá bé hơn giá min : {__lower_min_price_product_format(lower_min_price_products)}
+"""
+
+    return note_message, _last_update_message
+
+
 # def no_need_update_message(
 #     my_seller: str,
 #     price: float,

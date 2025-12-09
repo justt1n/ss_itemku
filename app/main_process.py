@@ -14,6 +14,7 @@ from app.utils.stock_fake import calculate_price_stock_fake, get_row
 from app.utils.update_messages import (
     update_with_min_price_message,
     update_with_comparing_seller_message,
+    skip_update_price_already_competitive_message,
 )
 
 
@@ -247,6 +248,237 @@ def check_product_compare_flow(
         product.update()
 
 
+def check_product_compare_flow2(
+    sb,
+    product: Product,
+    index: int | None = None,
+):
+    """
+    Compare product prices with competitors (CONDITIONAL UPDATE MODE).
+
+    This function:
+    1. Gets the current price from Itemku API
+    2. Calculates the target competitive price
+    3. Only updates if current price is HIGHER than target price
+    4. If current price is already lower or equal to target, skips update
+
+    Use this mode to avoid raising prices when they're already competitive.
+    """
+    min_price = product.min_price()
+    max_price = product.max_price()
+    blacklist = product.blacklist()
+
+    # Get current price from Itemku API
+    product_id = extract_product_id_from_product_link(product.Product_link)
+    try:
+        product_details = itemku_api.get_product_details(product_id)
+        # Response structure: {"success": true, "data": {"data": [{"id": ..., "price": ...}]}}
+        products_list = product_details.get("data", {}).get("data", [])
+        if not products_list or len(products_list) == 0:
+            raise Exception(f"Product {product_id} not found in response")
+        current_price = int(products_list[0].get("price", 0))
+        print(f"Current price from API: {current_price}")
+    except Exception as e:
+        print(f"Error getting current price: {e}")
+        print("Falling back to flow 1 behavior (always update)")
+        check_product_compare_flow(sb, product, index)
+        return
+
+
+    crwl_api_res = extract_data(
+        sb,
+        api=crwl_api,
+        url=product.PRODUCT_COMPARE,
+    )
+
+    products = crwl_api_res.data.data
+
+    valid_products = []
+    valid_keywords_products: list[CrwlProduct] = []
+    min_price_product: CrwlProduct | None = None
+
+    for _product in products:
+        # Check shopname not in blacklist
+        if _product.seller.shop_name not in blacklist:
+            # Check Include and Exclude keyword in product name
+            if (
+                (
+                    product.INCLUDE_KEYWORD
+                    and all(
+                    (
+                        keyword.lower()
+                        in _product.name.lower() + _product.server_name.lower()
+                        if _product.server_name
+                        else ""
+                    )
+                    for keyword in product.INCLUDE_KEYWORD.split(
+                        KEYWORD_SPLIT_BY_CHARACTER
+                    )
+                )
+                )
+                or product.INCLUDE_KEYWORD is None
+            ) and (
+                product.EXCLUDE_KEYWORD
+                and not any(
+                (
+                    keyword.lower()
+                    in _product.name.lower() + _product.server_name.lower()
+                    if _product.server_name
+                    else ""
+                )
+                for keyword in product.EXCLUDE_KEYWORD.split(
+                    KEYWORD_SPLIT_BY_CHARACTER
+                )
+            )
+                or product.EXCLUDE_KEYWORD is None
+            ):
+                valid_keywords_products.append(_product)
+                # Check product price in valid range
+                if (max_price and min_price <= _product.price <= max_price) or (
+                    max_price is None and min_price <= _product.price
+                ):
+                    valid_products.append(_product)
+                    if (
+                        min_price_product is None
+                        or _product.price < min_price_product.price
+                    ):
+                        min_price_product = _product
+
+    print(f"Number of product: {len(products)}")
+    print(f"Valid products: {len(valid_products)}")
+
+    # Get order site price
+    order_site_min_price, stock_fake_items = calculate_order_site_price(index)
+    new_min_price = min_price
+    stock_fake_str = ""
+    od_min_price = None
+    od_seller = None
+    od_site = None
+
+    if order_site_min_price is not None:
+        od_min_price = order_site_min_price[0]
+        od_seller = order_site_min_price[1]
+        od_site = order_site_min_price[2]
+        stock_fake_str = f"Order site min price: {od_min_price} - {od_seller} - {od_site}\n"
+        stock_fake_str += "Order site items:\n"
+        for item in stock_fake_items:
+            stock_fake_str += f"{item[0]} - {item[1]} - {item[2]}\n"
+
+    # Calculate target price
+    if min_price_product is None:
+        if od_min_price is not None and od_min_price > min_price:
+            print(f"No valid product found but order site have better price: {od_min_price} > min price: {min_price}")
+            print(f"Set {new_min_price} to product")
+            new_min_price = min_price
+
+        # Calculate target price
+        if max_price:
+            target_price = max_price
+        else:
+            target_price = new_min_price
+
+        target_price = itemku_api.valid_price(target_price)
+
+        # Flow 2: Compare current price with target price
+        if current_price <= target_price:
+            # Current price is already competitive, no update needed
+            print(f"Flow 2: Current price ({current_price}) <= Target ({target_price}). No update needed.")
+
+            note_message, last_update_message = skip_update_price_already_competitive_message(
+                current_price=current_price,
+                target_price=target_price,
+                price_min=min_price,
+                price_max=max_price,
+                lower_min_price_products=__filter_lower_than_target_price(
+                    products=valid_keywords_products, target_price=target_price
+                ),
+            )
+            print(note_message)
+            product.Note = note_message + stock_fake_str
+            product.Last_update = last_update_message
+            product.update()
+        else:
+            # Current price is higher than target, update needed
+            print(f"Flow 2: Current price ({current_price}) > Target ({target_price}). Updating price.")
+
+            update_product_price(
+                product_id=product_id,
+                target_price=target_price,
+            )
+
+            note_message, last_update_message = update_with_min_price_message(
+                price=target_price,
+                price_min=min_price,
+                price_max=max_price,
+                lower_min_price_products=__filter_lower_than_target_price(
+                    products=valid_keywords_products, target_price=target_price
+                ),
+            )
+            print(note_message)
+            product.Note = note_message + stock_fake_str
+            product.Last_update = last_update_message
+            product.update()
+    else:
+        # Calculate competitive price
+        target_price = calculate_competitive_price(
+            product=product,
+            min_price=new_min_price,
+            compare_price=min_price_product.price,
+        )
+
+        if od_min_price is not None and target_price > od_min_price and min_price < od_min_price:
+            new_min_price = min_price
+            _compare_price = od_min_price
+            _compare_seller = f"{od_seller} ({od_site})"
+        else:
+            _compare_price = min_price_product.price
+            _compare_seller = min_price_product.seller.shop_name
+
+        # Flow 2: Compare current price with target price
+        if current_price <= target_price:
+            # Current price is already competitive, no update needed
+            print(f"Flow 2: Current price ({current_price}) <= Target ({target_price}) (comparing with {_compare_seller} at {_compare_price}). No update needed.")
+
+            note_message, last_update_message = skip_update_price_already_competitive_message(
+                current_price=current_price,
+                target_price=target_price,
+                price_min=min_price,
+                price_max=max_price,
+                comparing_price=_compare_price,
+                comparing_seller=_compare_seller,
+                lower_min_price_products=__filter_lower_than_target_price(
+                    products=valid_keywords_products, target_price=target_price
+                ),
+            )
+            print(note_message)
+            product.Note = note_message + stock_fake_str
+            product.Last_update = last_update_message
+            product.update()
+        else:
+            # Current price is higher than target, update needed
+            print(f"Flow 2: Current price ({current_price}) > Target ({target_price}) (comparing with {_compare_seller} at {_compare_price}). Updating price.")
+
+            update_product_price(
+                product_id=product_id,
+                target_price=target_price,
+            )
+
+            note_message, last_update_message = update_with_comparing_seller_message(
+                price=target_price,
+                price_min=min_price,
+                price_max=max_price,
+                comparing_price=_compare_price,
+                comparing_seller=_compare_seller,
+                lower_min_price_products=__filter_lower_than_target_price(
+                    products=valid_keywords_products, target_price=target_price
+                ),
+            )
+            print(note_message)
+            product.Note = note_message + stock_fake_str
+            product.Last_update = last_update_message
+            product.update()
+
+
 def no_check_product_compare_flow(
     product: Product,
 ):
@@ -315,6 +547,10 @@ def process(
     if product.CHECK_PRODUCT_COMPARE == 1:
         print("Check product compare flow")
         check_product_compare_flow(sb, product, index)
+
+    elif product.CHECK_PRODUCT_COMPARE == 2:
+        print("Compare but if current price is lower target then do nothing")
+        check_product_compare_flow2(sb, product, index)
 
     else:
         print("No check product compare flow")
