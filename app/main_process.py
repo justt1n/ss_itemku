@@ -19,16 +19,16 @@ from app.utils.update_messages import (
 
 
 def __filter_lower_than_target_price(
-    products: list[CrwlProduct],
-    target_price: int,
+        products: list[CrwlProduct],
+        target_price: int,
 ) -> list[CrwlProduct]:
     return [product for product in products if product.price < target_price]
 
 
 def update_product_price(
-    product_id: int,
-    target_price: int,
-    stock: int | None = None,
+        product_id: int,
+        target_price: int,
+        stock: int | None = None,
 ):
     """
     Update product price and optionally update stock.
@@ -58,7 +58,7 @@ def update_product_price(
 
 
 def extract_product_id_from_product_link(
-    product_link: str,
+        product_link: str,
 ) -> int:
     pattern = r"/dagangan/(\d+)/edit"
 
@@ -71,9 +71,9 @@ def extract_product_id_from_product_link(
 
 
 def update_by_min_price_or_max_price(
-    product: Product,
-    min_price: int,
-    max_price: int | None,
+        product: Product,
+        min_price: int,
+        max_price: int | None,
 ) -> int:
     if max_price:
         target_price = max_price
@@ -103,9 +103,9 @@ def update_by_min_price_or_max_price(
 
 
 def calculate_competitive_price(
-    product: Product,
-    min_price: int,
-    compare_price: int,
+        product: Product,
+        min_price: int,
+        compare_price: int,
 ) -> int:
     if compare_price - product.DONGIAGIAM_MAX >= min_price:
         min_target = compare_price - product.DONGIAGIAM_MAX
@@ -124,9 +124,9 @@ def calculate_competitive_price(
 
 
 def check_product_compare_flow(
-    sb,
-    product: Product,
-    index: int | None = None,
+        sb,
+        product: Product,
+        index: int | None = None,
 ):
     min_price = product.min_price()
     max_price = product.max_price()
@@ -151,46 +151,46 @@ def check_product_compare_flow(
         if _product.seller.shop_name not in blacklist:
             # Check Include and Exclude keyword in product name
             if (
-                (
-                    product.INCLUDE_KEYWORD
-                    and all(
                     (
+                            product.INCLUDE_KEYWORD
+                            and all(
+                        (
+                                keyword.lower()
+                                in _product.name.lower() + _product.server_name.lower()
+                                if _product.server_name
+                                else ""
+                        )
+                        for keyword in product.INCLUDE_KEYWORD.split(
+                            KEYWORD_SPLIT_BY_CHARACTER
+                        )
+                    )
+                    )
+                    or product.INCLUDE_KEYWORD is None
+            ) and (
+                    product.EXCLUDE_KEYWORD
+                    and not any(
+                (
                         keyword.lower()
                         in _product.name.lower() + _product.server_name.lower()
                         if _product.server_name
                         else ""
-                    )
-                    for keyword in product.INCLUDE_KEYWORD.split(
-                        KEYWORD_SPLIT_BY_CHARACTER
-                    )
-                )
-                )
-                or product.INCLUDE_KEYWORD is None
-            ) and (
-                product.EXCLUDE_KEYWORD
-                and not any(
-                (
-                    keyword.lower()
-                    in _product.name.lower() + _product.server_name.lower()
-                    if _product.server_name
-                    else ""
                 )
                 for keyword in product.EXCLUDE_KEYWORD.split(
                     KEYWORD_SPLIT_BY_CHARACTER
                 )
             )
-                or product.EXCLUDE_KEYWORD is None
+                    or product.EXCLUDE_KEYWORD is None
             ):
                 # print(f"VALID: {_product}")
                 valid_keywords_products.append(_product)
                 # Check product price in valid range
                 if (max_price and min_price <= _product.price <= max_price) or (
-                    max_price is None and min_price <= _product.price
+                        max_price is None and min_price <= _product.price
                 ):
                     valid_products.append(_product)
                     if (
-                        min_price_product is None
-                        or _product.price < min_price_product.price
+                            min_price_product is None
+                            or _product.price < min_price_product.price
                     ):
                         min_price_product = _product
 
@@ -285,20 +285,13 @@ def check_product_compare_flow(
 
 
 def check_product_compare_flow2(
-    sb,
-    product: Product,
-    index: int | None = None,
+        sb,
+        product: Product,
+        index: int | None = None,
 ):
     """
     Compare product prices with competitors (CONDITIONAL UPDATE MODE).
-
-    This function:
-    1. Gets the current price from Itemku API
-    2. Calculates the target competitive price
-    3. Only updates if current price is HIGHER than target price
-    4. If current price is already lower or equal to target, skips update
-
-    Use this mode to avoid raising prices when they're already competitive.
+    REFACTORED: Added safety check to force update if current_price < min_price.
     """
     min_price = product.min_price()
     max_price = product.max_price()
@@ -320,7 +313,6 @@ def check_product_compare_flow2(
         check_product_compare_flow(sb, product, index)
         return
 
-
     crwl_api_res = extract_data(
         sb,
         api=crwl_api,
@@ -338,45 +330,45 @@ def check_product_compare_flow2(
         if _product.seller.shop_name not in blacklist:
             # Check Include and Exclude keyword in product name
             if (
-                (
-                    product.INCLUDE_KEYWORD
-                    and all(
                     (
+                            product.INCLUDE_KEYWORD
+                            and all(
+                        (
+                                keyword.lower()
+                                in _product.name.lower() + _product.server_name.lower()
+                                if _product.server_name
+                                else ""
+                        )
+                        for keyword in product.INCLUDE_KEYWORD.split(
+                            KEYWORD_SPLIT_BY_CHARACTER
+                        )
+                    )
+                    )
+                    or product.INCLUDE_KEYWORD is None
+            ) and (
+                    product.EXCLUDE_KEYWORD
+                    and not any(
+                (
                         keyword.lower()
                         in _product.name.lower() + _product.server_name.lower()
                         if _product.server_name
                         else ""
-                    )
-                    for keyword in product.INCLUDE_KEYWORD.split(
-                        KEYWORD_SPLIT_BY_CHARACTER
-                    )
-                )
-                )
-                or product.INCLUDE_KEYWORD is None
-            ) and (
-                product.EXCLUDE_KEYWORD
-                and not any(
-                (
-                    keyword.lower()
-                    in _product.name.lower() + _product.server_name.lower()
-                    if _product.server_name
-                    else ""
                 )
                 for keyword in product.EXCLUDE_KEYWORD.split(
                     KEYWORD_SPLIT_BY_CHARACTER
                 )
             )
-                or product.EXCLUDE_KEYWORD is None
+                    or product.EXCLUDE_KEYWORD is None
             ):
                 valid_keywords_products.append(_product)
                 # Check product price in valid range
                 if (max_price and min_price <= _product.price <= max_price) or (
-                    max_price is None and min_price <= _product.price
+                        max_price is None and min_price <= _product.price
                 ):
                     valid_products.append(_product)
                     if (
-                        min_price_product is None
-                        or _product.price < min_price_product.price
+                            min_price_product is None
+                            or _product.price < min_price_product.price
                     ):
                         min_price_product = _product
 
@@ -400,12 +392,12 @@ def check_product_compare_flow2(
         for item in stock_fake_items:
             stock_fake_str += f"{item[0]} - {item[1]} - {item[2]}\n"
 
-    # Calculate target price
+    # --- CASE 1: NO VALID COMPETITOR FOUND ---
     if min_price_product is None:
         if od_min_price is not None and od_min_price > min_price:
             print(f"No valid product found but order site have better price: {od_min_price} > min price: {min_price}")
             print(f"Set {new_min_price} to product")
-            new_min_price = min_price
+            new_min_price = min_price  # Logic cũ của bạn có vẻ set new_min = min ở đây là đúng ý đồ?
 
         # Calculate target price
         if max_price:
@@ -415,9 +407,36 @@ def check_product_compare_flow2(
 
         target_price = itemku_api.valid_price(target_price)
 
-        # Flow 2: Compare current price with target price
-        if current_price <= target_price:
-            # Current price is already competitive, no update needed
+        # [FIX ADDED] Check if current price is dangerously low
+        if current_price < new_min_price:
+            print(
+                f"Flow 2 (No Comp): SAFETY TRIGGER - Current ({current_price}) < Min ({new_min_price}). Force Update.")
+
+            try:
+                stock = product.stock()
+            except Exception as e:
+                print(f"Warning: Could not get stock from sheets: {e}")
+                stock = None
+
+            update_product_price(
+                product_id=product_id,
+                target_price=new_min_price,  # Force về min
+                stock=stock,
+            )
+
+            note_message, last_update_message = update_with_min_price_message(
+                price=new_min_price,
+                price_min=min_price,
+                price_max=max_price,
+                lower_min_price_products=[]
+            )
+            print(note_message)
+            product.Note = note_message + stock_fake_str
+            product.Last_update = last_update_message
+            product.update()
+
+        # [EXISTING LOGIC] Skip update
+        elif current_price <= target_price:
             print(f"Flow 2: Current price ({current_price}) <= Target ({target_price}). No update needed.")
 
             note_message, last_update_message = skip_update_price_already_competitive_message(
@@ -433,11 +452,11 @@ def check_product_compare_flow2(
             product.Note = note_message + stock_fake_str
             product.Last_update = last_update_message
             product.update()
+
+        # [EXISTING LOGIC] Normal Update
         else:
-            # Current price is higher than target, update needed
             print(f"Flow 2: Current price ({current_price}) > Target ({target_price}). Updating price.")
 
-            # Get stock from Google Sheets
             try:
                 stock = product.stock()
             except Exception as e:
@@ -462,6 +481,8 @@ def check_product_compare_flow2(
             product.Note = note_message + stock_fake_str
             product.Last_update = last_update_message
             product.update()
+
+    # --- CASE 2: COMPETITOR FOUND ---
     else:
         # Calculate competitive price
         target_price = calculate_competitive_price(
@@ -478,10 +499,41 @@ def check_product_compare_flow2(
             _compare_price = min_price_product.price
             _compare_seller = min_price_product.seller.shop_name
 
-        # Flow 2: Compare current price with target price
-        if current_price <= target_price:
-            # Current price is already competitive, no update needed
-            print(f"Flow 2: Current price ({current_price}) <= Target ({target_price}) (comparing with {_compare_seller} at {_compare_price}). No update needed.")
+        # [FIX ADDED] Check if current price is dangerously low
+        if current_price < new_min_price:
+            print(
+                f"Flow 2 (Has Comp): SAFETY TRIGGER - Current ({current_price}) < Min ({new_min_price}). Force Update.")
+
+            try:
+                stock = product.stock()
+            except Exception as e:
+                print(f"Warning: Could not get stock from sheets: {e}")
+                stock = None
+
+            update_product_price(
+                product_id=product_id,
+                target_price=new_min_price,  # Force về min
+                stock=stock,
+            )
+
+            # Sử dụng message update min price vì ta đang reset về sàn
+            note_message, last_update_message = update_with_min_price_message(
+                price=new_min_price,
+                price_min=min_price,
+                price_max=max_price,
+                lower_min_price_products=__filter_lower_than_target_price(
+                    products=valid_keywords_products, target_price=new_min_price
+                ),
+            )
+            print(note_message)
+            product.Note = note_message + stock_fake_str
+            product.Last_update = last_update_message
+            product.update()
+
+        # [EXISTING LOGIC] Skip update
+        elif current_price <= target_price:
+            print(
+                f"Flow 2: Current price ({current_price}) <= Target ({target_price}) (comparing with {_compare_seller} at {_compare_price}). No update needed.")
 
             note_message, last_update_message = skip_update_price_already_competitive_message(
                 current_price=current_price,
@@ -498,11 +550,12 @@ def check_product_compare_flow2(
             product.Note = note_message + stock_fake_str
             product.Last_update = last_update_message
             product.update()
-        else:
-            # Current price is higher than target, update needed
-            print(f"Flow 2: Current price ({current_price}) > Target ({target_price}) (comparing with {_compare_seller} at {_compare_price}). Updating price.")
 
-            # Get stock from Google Sheets
+        # [EXISTING LOGIC] Normal Update
+        else:
+            print(
+                f"Flow 2: Current price ({current_price}) > Target ({target_price}) (comparing with {_compare_seller} at {_compare_price}). Updating price.")
+
             try:
                 stock = product.stock()
             except Exception as e:
@@ -532,7 +585,7 @@ def check_product_compare_flow2(
 
 
 def no_check_product_compare_flow(
-    product: Product,
+        product: Product,
 ):
     min_price = product.min_price()
     max_price = product.max_price()
@@ -592,9 +645,9 @@ def calculate_order_site_price(index: int | None = None):
 
 
 def process(
-    sb,
-    product: Product,
-    index: int | None = None,
+        sb,
+        product: Product,
+        index: int | None = None,
 ):
     if product.CHECK_PRODUCT_COMPARE == 1:
         print("Check product compare flow")
